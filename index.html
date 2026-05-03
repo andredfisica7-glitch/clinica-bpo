@@ -1407,17 +1407,20 @@ function saveCashBalance(){state.settings.cashBalance=parseFloat(document.getEle
 function renderDRE(){
   const pays=state.payables;
   const receitaBruta=(state.entries||[]).filter(e=>monthKey(e.date)===viewMonth).reduce((s,e)=>s+e.amount,0);
-  const paidPays=pays.filter(p=>p.paid&&p.paidDate&&monthKey(p.paidDate)===viewMonth);
-  const totalDespesas=paidPays.reduce((s,p)=>s+p.amount,0);
-  const byCat={};paidPays.forEach(p=>{byCat[p.category]=(byCat[p.category]||0)+p.amount;});
-  const byCard={};paidPays.filter(p=>p.card).forEach(p=>{byCard[p.card]=(byCard[p.card]||0)+p.amount;});
+  // Regime de competência: usa dueDate (mês de vencimento), não paidDate
+  const compPays=pays.filter(p=>monthKey(p.dueDate)===viewMonth);
+  const totalDespesas=compPays.reduce((s,p)=>s+p.amount,0);
+  const byCat={};compPays.forEach(p=>{byCat[p.category]=(byCat[p.category]||0)+p.amount;});
+  const byCard={};compPays.filter(p=>p.card).forEach(p=>{byCard[p.card]=(byCard[p.card]||0)+p.amount;});
+  const paidTotal=compPays.filter(p=>p.paid).reduce((s,p)=>s+p.amount,0);
+  const pendTotal=compPays.filter(p=>!p.paid).reduce((s,p)=>s+p.amount,0);
   const resultado=receitaBruta-totalDespesas;
   const margem=receitaBruta>0?(resultado/receitaBruta*100).toFixed(1):0;
   const months6=[];
   for(let i=5;i>=0;i--){
     const[y,m]=viewMonth.split('-').map(Number);const dt=new Date(y,m-1-i,1);const mk=dt.toISOString().slice(0,7);
     const rec6=(state.entries||[]).filter(e=>monthKey(e.date)===mk).reduce((s,e)=>s+e.amount,0);
-    const pay6=pays.filter(p=>p.paid&&p.paidDate&&monthKey(p.paidDate)===mk).reduce((s,p)=>s+p.amount,0);
+    const pay6=pays.filter(p=>monthKey(p.dueDate)===mk).reduce((s,p)=>s+p.amount,0);
     months6.push({mk,label:dt.toLocaleDateString('pt-BR',{month:'short'}),rec:rec6,pay:pay6,res:rec6-pay6});
   }
   window.__dreMonths=months6;
@@ -1434,9 +1437,11 @@ function renderDRE(){
         <button onclick="navigate('entries')" style="margin-left:8px;background:var(--green-bg);color:var(--green);border:1px solid var(--green-brd);border-radius:20px;padding:2px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:'Poppins',sans-serif;">+ Lançar</button>
       </div>
       <div class="dre-row"><span class="dre-label">(+) Receita Bruta</span><span class="dre-value pos">${fmt(receitaBruta)}</span></div>
-      <div class="dre-section-header" style="margin-top:12px;">Despesas Operacionais</div>
+      <div class="dre-section-header" style="margin-top:12px;">Despesas Operacionais <span style="font-size:10px;font-weight:400;color:var(--text-mid);margin-left:6px;">regime de competência</span></div>
       ${Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([cat,val])=>`<div class="dre-row sub-item"><span class="dre-label">(−) ${cat}</span><span class="dre-value neg">${fmt(val)}</span></div>`).join('')}
       <div class="dre-row"><span class="dre-label">Total Despesas</span><span class="dre-value neg">${fmt(totalDespesas)}</span></div>
+      <div class="dre-row sub-item" style="opacity:.75;"><span class="dre-label" style="color:var(--green);">↳ Já pagas</span><span class="dre-value" style="color:var(--green);">${fmt(paidTotal)}</span></div>
+      ${pendTotal>0?`<div class="dre-row sub-item" style="opacity:.75;"><span class="dre-label" style="color:var(--warn);">↳ A pagar</span><span class="dre-value" style="color:var(--warn);">${fmt(pendTotal)}</span></div>`:''}
       <div class="dre-row total"><span class="dre-label" style="font-weight:700;">(=) Resultado Operacional</span><span class="dre-value ${resultado>=0?'pos':'neg'}" style="font-size:16px;">${fmt(resultado)}</span></div>
     </div>
     <div class="dre-margin-card">
@@ -1818,14 +1823,15 @@ function openManualMatch(txnId){
   const absAmt=Math.abs(t.amount);
   const accountId=state.bankStatements[concilStatementIdx].accountId;
 
-  // Candidatos: payables próximos ± 30 dias com valor similar (±20%)
+  // Candidatos: valor similar ±10% ou R$2,00 (o que for maior)
+  const matchTol=Math.max(absAmt*0.10, 2);
   const payables=state.payables.filter(p=>
     (p.account===accountId||!p.account)&&
-    Math.abs(p.amount-absAmt)/Math.max(absAmt,1)<=0.5
+    Math.abs(p.amount-absAmt)<=matchTol
   ).sort((a,b)=>Math.abs(a.amount-absAmt)-Math.abs(b.amount-absAmt)).slice(0,10);
 
   const entries=(state.entries||[]).filter(e=>
-    Math.abs(e.amount-absAmt)/Math.max(absAmt,1)<=0.5
+    Math.abs(e.amount-absAmt)<=matchTol
   ).sort((a,b)=>Math.abs(a.amount-absAmt)-Math.abs(b.amount-absAmt)).slice(0,10);
 
   openSheet(`<div class="sheet-title">Vincular manualmente</div><div class="sheet-body">
