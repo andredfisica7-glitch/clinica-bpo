@@ -217,7 +217,8 @@ const DEFAULT_STATE={
   professionals:[{id:'pro1',name:'Dra. Soraia',commission:0,color:'#9B7FA6',role:'Proprietária'},{id:'pro2',name:'Profissional 2',commission:40,color:'#B8857A',role:'Profissional'}],
   payables:[],entries:[],patients:[],inventory:[],bankStatements:[],
   suppliers:[{id:'sup1',name:'Fornecedor de Insumos',category:'Insumos'},{id:'sup2',name:'Imóvel / Aluguel',category:'Aluguel'},{id:'sup3',name:'Contador',category:'Contabilidade'}],
-  payCategories:['Insumos/Materiais','Aluguel','Marketing','Energia/Telecom','Folha/Pró-labore','Equipamentos','Contabilidade','Outros']
+  payCategories:['Insumos/Materiais','Aluguel','Marketing','Energia/Telecom','Folha/Pró-labore','Equipamentos','Contabilidade','Outros'],
+  entCategories:['Procedimento','Consulta','Produto','Pacote','Outros']
 };
 let state={};
 let currentView='dashboard';
@@ -233,6 +234,7 @@ function loadState(){
     const saved=localStorage.getItem('soraia_bpo_v2');
     if(saved){state=JSON.parse(saved);}else{state=JSON.parse(JSON.stringify(DEFAULT_STATE));}
     if(!state.payCategories)state.payCategories=DEFAULT_STATE.payCategories;
+    if(!state.entCategories)state.entCategories=DEFAULT_STATE.entCategories;
     if(!state.suppliers)state.suppliers=DEFAULT_STATE.suppliers;
     if(!state.settings)state.settings=DEFAULT_STATE.settings;
     if(state.settings.cashBalance===undefined)state.settings.cashBalance=0;
@@ -244,6 +246,25 @@ function loadState(){
   }catch(e){state=JSON.parse(JSON.stringify(DEFAULT_STATE));}
 }
 function saveState(){localStorage.setItem('soraia_bpo_v2',JSON.stringify(state));}
+
+// ═══ CATEGORY HELPERS ═══
+function catSelectOpts(type,selectedVal){
+  const list=type==='pay'?state.payCategories:state.entCategories;
+  return list.map(c=>`<option value="${c}"${c===selectedVal?' selected':''}>${c}</option>`).join('')
+    +'<option value="__new__">＋ Nova categoria...</option>';
+}
+function addInlineCategory(type,selectId){
+  const sel=document.getElementById(selectId);if(!sel)return;
+  const prev=sel.dataset.prev||sel.options[0]?.value||'';
+  const name=prompt('Nome da nova categoria:');
+  if(!name||!name.trim()){sel.value=prev;return;}
+  const cat=name.trim();
+  const list=type==='pay'?state.payCategories:state.entCategories;
+  if(!list.includes(cat))list.push(cat);
+  saveState();
+  sel.innerHTML=catSelectOpts(type,cat);
+  sel.value=cat;
+}
 
 // ═══ HELPERS ═══
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
@@ -501,8 +522,7 @@ function openNewEntrada(){
         ${CARDS.map(c=>`<label class="radio-opt" id="entcard-${c.id}" onclick="selectEntCard('${c.id}')">${c.name}</label>`).join('')}
       </div></div>
     <div class="field-row">
-      <div class="field"><label>Categoria</label><select id="ent-cat">
-        ${ENT_CATEGORIES.map(c=>`<option>${c}</option>`).join('')}</select></div>
+      <div class="field"><label>Categoria</label><select id="ent-cat" onfocus="this.dataset.prev=this.value" onchange="if(this.value==='__new__')addInlineCategory('ent','ent-cat')">${catSelectOpts('ent','')}</select></div>
       <div class="field"><label>Profissional</label><select id="ent-pro"><option value="">Nenhum</option>${proOpts}</select></div>
     </div>
     <div class="field"><label>Paciente (opcional)</label><select id="ent-pat"><option value="">Nenhum</option>${patOpts}</select></div>
@@ -544,8 +564,7 @@ function openEditEntrada(id){
     <div class="field"><label>Maquininha (se cartão)</label><select id="ee-card">
       <option value="">Nenhuma</option>${CARDS.map(c=>`<option value="${c.id}" ${c.id===e.paymentCard?'selected':''}>${c.name}</option>`).join('')}</select></div>
     <div class="field-row">
-      <div class="field"><label>Categoria</label><select id="ee-cat">
-        ${ENT_CATEGORIES.map(c=>`<option ${c===e.category?'selected':''}>${c}</option>`).join('')}</select></div>
+      <div class="field"><label>Categoria</label><select id="ee-cat" onfocus="this.dataset.prev=this.value" onchange="if(this.value==='__new__')addInlineCategory('ent','ee-cat')">${catSelectOpts('ent',e.category)}</select></div>
       <div class="field"><label>Profissional</label><select id="ee-pro"><option value="">Nenhum</option>${proOpts}</select></div>
     </div>
     <div class="field"><label>Paciente</label><select id="ee-pat"><option value="">Nenhum</option>${patOpts}</select></div>
@@ -1129,13 +1148,12 @@ let payFixFormaSel='pix';let payFixCardSel='';
 let payAVistaFormaSel='pix';let payAVistaCardSel='';
 
 function openNewPayable(){
-  const catOpts=state.payCategories.map(c=>`<option value="${c}">${c}</option>`).join('');
   const supOpts=state.suppliers.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
   payTipoSel='avista';payPagoSel='nao';payCardSel='';payFixFormaSel='pix';payFixCardSel='';payAVistaFormaSel='pix';payAVistaCardSel='';
   openSheet(`<div class="sheet-title">Nova Despesa</div><div class="sheet-body">
     <div class="field"><label>Descrição</label><input id="pay-desc" placeholder="Ex.: Aluguel Maio, Produto XYZ"></div>
     <div class="field-row">
-      <div class="field"><label>Categoria</label><select id="pay-cat">${catOpts}</select></div>
+      <div class="field"><label>Categoria</label><select id="pay-cat" onfocus="this.dataset.prev=this.value" onchange="if(this.value==='__new__')addInlineCategory('pay','pay-cat')">${catSelectOpts('pay','')}</select></div>
       <div class="field"><label>Valor Total (R$)</label><input type="number" id="pay-amount" placeholder="0,00" step="0.01" min="0"></div>
     </div>
     <div class="field"><label>Tipo de pagamento</label>
@@ -1283,7 +1301,6 @@ function saveNewPayable(){
 
 function openEditPayable(id){
   const p=state.payables.find(x=>x.id===id);if(!p)return;
-  const catOpts=state.payCategories.map(c=>`<option value="${c}" ${c===p.category?'selected':''}>${c}</option>`).join('');
   const supOpts='<option value="">— Nenhum —</option>'+state.suppliers.map(s=>`<option value="${s.id}" ${s.id===p.supplierId?'selected':''}>${s.name}</option>`).join('');
   const accOpts='<option value="">— Nenhuma —</option>'+ACCOUNTS.map(a=>`<option value="${a.id}" ${a.id===p.account?'selected':''}>${a.name}</option>`).join('');
   const safeDesc=(p.desc||'').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -1291,7 +1308,7 @@ function openEditPayable(id){
   openSheet(`<div class="sheet-title">Editar Despesa</div><div class="sheet-body">
     <div class="field"><label>Descrição</label><input id="ep-desc" value="${safeDesc}"></div>
     <div class="field-row">
-      <div class="field"><label>Categoria</label><select id="ep-cat">${catOpts}</select></div>
+      <div class="field"><label>Categoria</label><select id="ep-cat" onfocus="this.dataset.prev=this.value" onchange="if(this.value==='__new__')addInlineCategory('pay','ep-cat')">${catSelectOpts('pay',p.category)}</select></div>
       <div class="field"><label>Valor (R$)</label><input type="number" id="ep-amount" value="${p.amount}" step="0.01" min="0"></div>
     </div>
     <div class="field-row">
