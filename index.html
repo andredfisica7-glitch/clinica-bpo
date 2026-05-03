@@ -1073,7 +1073,27 @@ function reconcilePayable(id){const p=state.payables.find(x=>x.id===id);if(!p)re
 function unreconcilePayable(id){const p=state.payables.find(x=>x.id===id);if(!p)return;p.reconciled=false;saveState();renderApp();showToast('Marcação removida');}
 function payPayable(id){const p=state.payables.find(x=>x.id===id);if(!p)return;p.paid=true;p.paidDate=today();saveState();showToast(`${fmt(p.amount)} pago ✓`);renderApp();}
 function undoPayPayable(id){const p=state.payables.find(x=>x.id===id);if(!p)return;p.paid=false;p.paidDate=null;saveState();showToast('Desfeito');renderApp();}
-function deletePayable(id){if(!confirm('Excluir esta despesa?'))return;state.payables=state.payables.filter(p=>p.id!==id);expandedPay=null;saveState();renderApp();showToast('Excluído');}
+function deletePayable(id){
+  const p=state.payables.find(x=>x.id===id);if(!p)return;
+  if(p.installmentGroup){
+    const grp=state.payables.filter(x=>x.installmentGroup===p.installmentGroup);
+    const remaining=grp.filter(x=>!x.paid);
+    const msg=`Esta despesa faz parte de um parcelamento (${p.installmentNumber}/${p.totalInstallments}).\n\nO que deseja excluir?\n\nOK = Todas as ${remaining.length} parcelas não pagas\nCancelar = Só esta parcela`;
+    if(confirm(msg)){
+      state.payables=state.payables.filter(x=>x.installmentGroup!==p.installmentGroup||x.paid);
+      showToast(`${remaining.length} parcelas excluídas`);
+    }else{
+      if(!confirm('Excluir só esta parcela?'))return;
+      state.payables=state.payables.filter(x=>x.id!==id);
+      showToast('Parcela excluída');
+    }
+  }else{
+    if(!confirm('Excluir esta despesa?'))return;
+    state.payables=state.payables.filter(x=>x.id!==id);
+    showToast('Excluído');
+  }
+  expandedPay=null;saveState();renderApp();
+}
 
 function openConciliacao(){
   const pays=state.payables.filter(p=>monthKey(p.dueDate)===viewMonth);
@@ -1264,7 +1284,10 @@ function saveNewPayable(){
 function openEditPayable(id){
   const p=state.payables.find(x=>x.id===id);if(!p)return;
   const catOpts=state.payCategories.map(c=>`<option value="${c}" ${c===p.category?'selected':''}>${c}</option>`).join('');
+  const supOpts='<option value="">— Nenhum —</option>'+state.suppliers.map(s=>`<option value="${s.id}" ${s.id===p.supplierId?'selected':''}>${s.name}</option>`).join('');
+  const accOpts='<option value="">— Nenhuma —</option>'+ACCOUNTS.map(a=>`<option value="${a.id}" ${a.id===p.account?'selected':''}>${a.name}</option>`).join('');
   const safeDesc=(p.desc||'').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  const safeNotes=(p.notes||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   openSheet(`<div class="sheet-title">Editar Despesa</div><div class="sheet-body">
     <div class="field"><label>Descrição</label><input id="ep-desc" value="${safeDesc}"></div>
     <div class="field-row">
@@ -1273,6 +1296,10 @@ function openEditPayable(id){
     </div>
     <div class="field-row">
       <div class="field"><label>Vencimento</label><input type="date" id="ep-due" value="${p.dueDate}"></div>
+      <div class="field"><label>Conta Bancária</label><select id="ep-account">${accOpts}</select></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Fornecedor</label><select id="ep-sup">${supOpts}</select></div>
       <div class="field"><label>Cartão</label><select id="ep-card">
         <option value="">Nenhum (PIX/Boleto)</option>${CARDS.map(c=>`<option value="${c.id}" ${c.id===p.card?'selected':''}>${c.name}</option>`).join('')}</select></div>
     </div>
@@ -1282,7 +1309,7 @@ function openEditPayable(id){
         <label class="radio-opt ${p.paid?'selected':''}" id="ep-sim" onclick="this.classList.add('selected');document.getElementById('ep-nao').classList.remove('selected');document.getElementById('ep-pago-wrap').style.display='block'">Pago</label>
       </div></div>
     <div id="ep-pago-wrap" style="display:${p.paid?'block':'none'};" class="field"><label>Data de pagamento</label><input type="date" id="ep-paid-date" value="${p.paidDate||today()}"></div>
-    <div class="field"><label>Observações</label><textarea id="ep-notes">${p.notes||''}</textarea></div>
+    <div class="field"><label>Observações</label><textarea id="ep-notes">${safeNotes}</textarea></div>
     <button class="btn-primary" onclick="saveEditPayable('${id}')">Salvar</button>
     <button class="btn-secondary" onclick="closeSheet()">Cancelar</button>
   </div>`);
@@ -1293,6 +1320,10 @@ function saveEditPayable(id){
   p.category=document.getElementById('ep-cat').value;
   p.amount=parseFloat(document.getElementById('ep-amount').value)||p.amount;
   p.dueDate=document.getElementById('ep-due').value||p.dueDate;
+  p.account=document.getElementById('ep-account').value||null;
+  const supId=document.getElementById('ep-sup').value;
+  p.supplierId=supId||null;
+  p.supplierName=supId?(state.suppliers.find(s=>s.id===supId)?.name||''):'';
   p.card=document.getElementById('ep-card').value||null;
   p.paid=document.getElementById('ep-sim').classList.contains('selected');
   p.paidDate=p.paid?(document.getElementById('ep-paid-date')?.value||p.dueDate):null;
