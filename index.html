@@ -217,8 +217,7 @@ const DEFAULT_STATE={
   professionals:[{id:'pro1',name:'Dra. Soraia',commission:0,color:'#9B7FA6',role:'Proprietária'},{id:'pro2',name:'Profissional 2',commission:40,color:'#B8857A',role:'Profissional'}],
   payables:[],entries:[],patients:[],inventory:[],bankStatements:[],
   suppliers:[{id:'sup1',name:'Fornecedor de Insumos',category:'Insumos'},{id:'sup2',name:'Imóvel / Aluguel',category:'Aluguel'},{id:'sup3',name:'Contador',category:'Contabilidade'}],
-  payCategories:['Insumos/Materiais','Aluguel','Marketing','Energia/Telecom','Folha/Pró-labore','Equipamentos','Contabilidade','Outros'],
-  entCategories:['Procedimento','Consulta','Produto','Pacote','Outros']
+  payCategories:['Insumos/Materiais','Aluguel','Marketing','Energia/Telecom','Folha/Pró-labore','Equipamentos','Contabilidade','Outros']
 };
 let state={};
 let currentView='dashboard';
@@ -234,7 +233,6 @@ function loadState(){
     const saved=localStorage.getItem('soraia_bpo_v2');
     if(saved){state=JSON.parse(saved);}else{state=JSON.parse(JSON.stringify(DEFAULT_STATE));}
     if(!state.payCategories)state.payCategories=DEFAULT_STATE.payCategories;
-    if(!state.entCategories)state.entCategories=DEFAULT_STATE.entCategories;
     if(!state.suppliers)state.suppliers=DEFAULT_STATE.suppliers;
     if(!state.settings)state.settings=DEFAULT_STATE.settings;
     if(state.settings.cashBalance===undefined)state.settings.cashBalance=0;
@@ -246,25 +244,6 @@ function loadState(){
   }catch(e){state=JSON.parse(JSON.stringify(DEFAULT_STATE));}
 }
 function saveState(){localStorage.setItem('soraia_bpo_v2',JSON.stringify(state));}
-
-// ═══ CATEGORY HELPERS ═══
-function catSelectOpts(type,selectedVal){
-  const list=type==='pay'?state.payCategories:state.entCategories;
-  return list.map(c=>`<option value="${c}"${c===selectedVal?' selected':''}>${c}</option>`).join('')
-    +'<option value="__new__">＋ Nova categoria...</option>';
-}
-function addInlineCategory(type,selectId){
-  const sel=document.getElementById(selectId);if(!sel)return;
-  const prev=sel.dataset.prev||sel.options[0]?.value||'';
-  const name=prompt('Nome da nova categoria:');
-  if(!name||!name.trim()){sel.value=prev;return;}
-  const cat=name.trim();
-  const list=type==='pay'?state.payCategories:state.entCategories;
-  if(!list.includes(cat))list.push(cat);
-  saveState();
-  sel.innerHTML=catSelectOpts(type,cat);
-  sel.value=cat;
-}
 
 // ═══ HELPERS ═══
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
@@ -334,88 +313,8 @@ function openMoreMenu(){
       <button class="more-card" onclick="navigate('cashflow')"><div class="mc-icon">💸</div><div class="mc-label">Fluxo de Caixa</div></button>
       <button class="more-card" onclick="navigate('inventory')"><div class="mc-icon">📦</div><div class="mc-label">Estoque</div></button>
       <button class="more-card" onclick="navigate('reconciliation')"><div class="mc-icon">🏦</div><div class="mc-label">Conciliação</div></button>
-      <button class="more-card" onclick="navigate('reports')"><div class="mc-icon">📤</div><div class="mc-label">Exportar CSV</div></button>
-      <button class="more-card" onclick="closeSheet();openDataMenu()"><div class="mc-icon">🔄</div><div class="mc-label">Dados & Backup</div></button>
+      <button class="more-card" onclick="navigate('reports')"><div class="mc-icon">📤</div><div class="mc-label">Exportar</div></button>
     </div>`);
-}
-
-function openDataMenu(){
-  openSheet(`<div class="sheet-title">Dados & Backup</div><div class="sheet-body">
-    <div style="font-size:12px;color:var(--text-mid);margin-bottom:16px;">Exporte para fazer backup ou compartilhar lançamentos com outro computador usando o mesmo BPO.</div>
-
-    <div style="font-weight:600;font-size:13px;margin-bottom:10px;">Exportar</div>
-    <button class="btn-primary" style="margin-bottom:10px;" onclick="exportBackupCompleto()">⬇ Backup completo (todos os dados)</button>
-    <button class="btn-secondary" style="margin-bottom:20px;" onclick="exportSoPayables()">⬇ Exportar só A/Pagar</button>
-
-    <div style="font-weight:600;font-size:13px;margin-bottom:6px;">Importar A/Pagar de outro BPO</div>
-    <div style="font-size:11px;color:var(--text-mid);margin-bottom:10px;">Apenas lançamentos novos serão adicionados. Seus dados atuais não serão apagados.</div>
-    <label style="display:block;padding:14px;border-radius:var(--r);border:1.5px dashed var(--mauve-brd);background:var(--mauve-bg);color:var(--mauve);font-size:13px;font-weight:600;text-align:center;cursor:pointer;">
-      📂 Selecionar arquivo .json
-      <input type="file" accept=".json" style="display:none" onchange="importPayables(this)">
-    </label>
-    <div id="import-result" style="margin-top:12px;font-size:12px;"></div>
-
-    <button class="btn-secondary" style="margin-top:16px;" onclick="closeSheet()">Fechar</button>
-  </div>`);
-}
-
-function exportBackupCompleto(){
-  const data=JSON.stringify(state,null,2);
-  const blob=new Blob([data],{type:'application/json'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  const d=new Date().toISOString().slice(0,10);
-  a.href=url;a.download=`bpo-backup-${d}.json`;a.click();
-  URL.revokeObjectURL(url);
-  showToast('Backup exportado ✓');
-}
-
-function exportSoPayables(){
-  const data=JSON.stringify({payables:state.payables,payCategories:state.payCategories,suppliers:state.suppliers},null,2);
-  const blob=new Blob([data],{type:'application/json'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  const d=new Date().toISOString().slice(0,10);
-  a.href=url;a.download=`bpo-apagar-${d}.json`;a.click();
-  URL.revokeObjectURL(url);
-  showToast('A/Pagar exportado ✓');
-}
-
-function importPayables(input){
-  const file=input.files[0];if(!file)return;
-  const reader=new FileReader();
-  reader.onload=function(e){
-    try{
-      const imported=JSON.parse(e.target.result);
-      // Aceita backup completo ou exportação de A/Pagar
-      const newPayables=imported.payables||[];
-      if(!Array.isArray(newPayables)||newPayables.length===0){
-        document.getElementById('import-result').innerHTML='<span style="color:var(--danger);">Arquivo inválido ou sem lançamentos.</span>';
-        return;
-      }
-      const existingIds=new Set(state.payables.map(p=>p.id));
-      const toAdd=newPayables.filter(p=>p.id&&!existingIds.has(p.id));
-      // Mescla categorias novas sem sobrescrever as existentes
-      if(imported.payCategories){
-        imported.payCategories.forEach(c=>{if(!state.payCategories.includes(c))state.payCategories.push(c);});
-      }
-      // Mescla fornecedores novos
-      if(imported.suppliers){
-        const existSupIds=new Set(state.suppliers.map(s=>s.id));
-        imported.suppliers.forEach(s=>{if(s.id&&!existSupIds.has(s.id))state.suppliers.push(s);});
-      }
-      state.payables=state.payables.concat(toAdd);
-      saveState();renderApp();
-      const skipped=newPayables.length-toAdd.length;
-      document.getElementById('import-result').innerHTML=
-        `<span style="color:var(--green);font-weight:600;">✓ ${toAdd.length} lançamento(s) importado(s).</span>`+
-        (skipped>0?` <span style="color:var(--text-mid)">${skipped} duplicata(s) ignorada(s).</span>`:'');
-      showToast(`${toAdd.length} lançamentos importados ✓`);
-    }catch(err){
-      document.getElementById('import-result').innerHTML='<span style="color:var(--danger);">Erro ao ler arquivo. Verifique se é um JSON válido.</span>';
-    }
-  };
-  reader.readAsText(file);
 }
 
 // ═══════════════════════════════════════════════
@@ -602,7 +501,8 @@ function openNewEntrada(){
         ${CARDS.map(c=>`<label class="radio-opt" id="entcard-${c.id}" onclick="selectEntCard('${c.id}')">${c.name}</label>`).join('')}
       </div></div>
     <div class="field-row">
-      <div class="field"><label>Categoria</label><select id="ent-cat" onfocus="this.dataset.prev=this.value" onchange="if(this.value==='__new__')addInlineCategory('ent','ent-cat')">${catSelectOpts('ent','')}</select></div>
+      <div class="field"><label>Categoria</label><select id="ent-cat">
+        ${ENT_CATEGORIES.map(c=>`<option>${c}</option>`).join('')}</select></div>
       <div class="field"><label>Profissional</label><select id="ent-pro"><option value="">Nenhum</option>${proOpts}</select></div>
     </div>
     <div class="field"><label>Paciente (opcional)</label><select id="ent-pat"><option value="">Nenhum</option>${patOpts}</select></div>
@@ -644,7 +544,8 @@ function openEditEntrada(id){
     <div class="field"><label>Maquininha (se cartão)</label><select id="ee-card">
       <option value="">Nenhuma</option>${CARDS.map(c=>`<option value="${c.id}" ${c.id===e.paymentCard?'selected':''}>${c.name}</option>`).join('')}</select></div>
     <div class="field-row">
-      <div class="field"><label>Categoria</label><select id="ee-cat" onfocus="this.dataset.prev=this.value" onchange="if(this.value==='__new__')addInlineCategory('ent','ee-cat')">${catSelectOpts('ent',e.category)}</select></div>
+      <div class="field"><label>Categoria</label><select id="ee-cat">
+        ${ENT_CATEGORIES.map(c=>`<option ${c===e.category?'selected':''}>${c}</option>`).join('')}</select></div>
       <div class="field"><label>Profissional</label><select id="ee-pro"><option value="">Nenhum</option>${proOpts}</select></div>
     </div>
     <div class="field"><label>Paciente</label><select id="ee-pat"><option value="">Nenhum</option>${patOpts}</select></div>
@@ -1228,12 +1129,13 @@ let payFixFormaSel='pix';let payFixCardSel='';
 let payAVistaFormaSel='pix';let payAVistaCardSel='';
 
 function openNewPayable(){
+  const catOpts=state.payCategories.map(c=>`<option value="${c}">${c}</option>`).join('');
   const supOpts=state.suppliers.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
   payTipoSel='avista';payPagoSel='nao';payCardSel='';payFixFormaSel='pix';payFixCardSel='';payAVistaFormaSel='pix';payAVistaCardSel='';
   openSheet(`<div class="sheet-title">Nova Despesa</div><div class="sheet-body">
     <div class="field"><label>Descrição</label><input id="pay-desc" placeholder="Ex.: Aluguel Maio, Produto XYZ"></div>
     <div class="field-row">
-      <div class="field"><label>Categoria</label><select id="pay-cat" onfocus="this.dataset.prev=this.value" onchange="if(this.value==='__new__')addInlineCategory('pay','pay-cat')">${catSelectOpts('pay','')}</select></div>
+      <div class="field"><label>Categoria</label><select id="pay-cat">${catOpts}</select></div>
       <div class="field"><label>Valor Total (R$)</label><input type="number" id="pay-amount" placeholder="0,00" step="0.01" min="0"></div>
     </div>
     <div class="field"><label>Tipo de pagamento</label>
@@ -1381,6 +1283,7 @@ function saveNewPayable(){
 
 function openEditPayable(id){
   const p=state.payables.find(x=>x.id===id);if(!p)return;
+  const catOpts=state.payCategories.map(c=>`<option value="${c}" ${c===p.category?'selected':''}>${c}</option>`).join('');
   const supOpts='<option value="">— Nenhum —</option>'+state.suppliers.map(s=>`<option value="${s.id}" ${s.id===p.supplierId?'selected':''}>${s.name}</option>`).join('');
   const accOpts='<option value="">— Nenhuma —</option>'+ACCOUNTS.map(a=>`<option value="${a.id}" ${a.id===p.account?'selected':''}>${a.name}</option>`).join('');
   const safeDesc=(p.desc||'').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -1388,7 +1291,7 @@ function openEditPayable(id){
   openSheet(`<div class="sheet-title">Editar Despesa</div><div class="sheet-body">
     <div class="field"><label>Descrição</label><input id="ep-desc" value="${safeDesc}"></div>
     <div class="field-row">
-      <div class="field"><label>Categoria</label><select id="ep-cat" onfocus="this.dataset.prev=this.value" onchange="if(this.value==='__new__')addInlineCategory('pay','ep-cat')">${catSelectOpts('pay',p.category)}</select></div>
+      <div class="field"><label>Categoria</label><select id="ep-cat">${catOpts}</select></div>
       <div class="field"><label>Valor (R$)</label><input type="number" id="ep-amount" value="${p.amount}" step="0.01" min="0"></div>
     </div>
     <div class="field-row">
@@ -1487,20 +1390,17 @@ function saveCashBalance(){state.settings.cashBalance=parseFloat(document.getEle
 function renderDRE(){
   const pays=state.payables;
   const receitaBruta=(state.entries||[]).filter(e=>monthKey(e.date)===viewMonth).reduce((s,e)=>s+e.amount,0);
-  // Regime de competência: usa dueDate (mês de vencimento), não paidDate
-  const compPays=pays.filter(p=>monthKey(p.dueDate)===viewMonth);
-  const totalDespesas=compPays.reduce((s,p)=>s+p.amount,0);
-  const byCat={};compPays.forEach(p=>{byCat[p.category]=(byCat[p.category]||0)+p.amount;});
-  const byCard={};compPays.filter(p=>p.card).forEach(p=>{byCard[p.card]=(byCard[p.card]||0)+p.amount;});
-  const paidTotal=compPays.filter(p=>p.paid).reduce((s,p)=>s+p.amount,0);
-  const pendTotal=compPays.filter(p=>!p.paid).reduce((s,p)=>s+p.amount,0);
+  const paidPays=pays.filter(p=>p.paid&&p.paidDate&&monthKey(p.paidDate)===viewMonth);
+  const totalDespesas=paidPays.reduce((s,p)=>s+p.amount,0);
+  const byCat={};paidPays.forEach(p=>{byCat[p.category]=(byCat[p.category]||0)+p.amount;});
+  const byCard={};paidPays.filter(p=>p.card).forEach(p=>{byCard[p.card]=(byCard[p.card]||0)+p.amount;});
   const resultado=receitaBruta-totalDespesas;
   const margem=receitaBruta>0?(resultado/receitaBruta*100).toFixed(1):0;
   const months6=[];
   for(let i=5;i>=0;i--){
     const[y,m]=viewMonth.split('-').map(Number);const dt=new Date(y,m-1-i,1);const mk=dt.toISOString().slice(0,7);
     const rec6=(state.entries||[]).filter(e=>monthKey(e.date)===mk).reduce((s,e)=>s+e.amount,0);
-    const pay6=pays.filter(p=>monthKey(p.dueDate)===mk).reduce((s,p)=>s+p.amount,0);
+    const pay6=pays.filter(p=>p.paid&&p.paidDate&&monthKey(p.paidDate)===mk).reduce((s,p)=>s+p.amount,0);
     months6.push({mk,label:dt.toLocaleDateString('pt-BR',{month:'short'}),rec:rec6,pay:pay6,res:rec6-pay6});
   }
   window.__dreMonths=months6;
@@ -1517,11 +1417,9 @@ function renderDRE(){
         <button onclick="navigate('entries')" style="margin-left:8px;background:var(--green-bg);color:var(--green);border:1px solid var(--green-brd);border-radius:20px;padding:2px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:'Poppins',sans-serif;">+ Lançar</button>
       </div>
       <div class="dre-row"><span class="dre-label">(+) Receita Bruta</span><span class="dre-value pos">${fmt(receitaBruta)}</span></div>
-      <div class="dre-section-header" style="margin-top:12px;">Despesas Operacionais <span style="font-size:10px;font-weight:400;color:var(--text-mid);margin-left:6px;">regime de competência</span></div>
+      <div class="dre-section-header" style="margin-top:12px;">Despesas Operacionais</div>
       ${Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([cat,val])=>`<div class="dre-row sub-item"><span class="dre-label">(−) ${cat}</span><span class="dre-value neg">${fmt(val)}</span></div>`).join('')}
       <div class="dre-row"><span class="dre-label">Total Despesas</span><span class="dre-value neg">${fmt(totalDespesas)}</span></div>
-      <div class="dre-row sub-item" style="opacity:.75;"><span class="dre-label" style="color:var(--green);">↳ Já pagas</span><span class="dre-value" style="color:var(--green);">${fmt(paidTotal)}</span></div>
-      ${pendTotal>0?`<div class="dre-row sub-item" style="opacity:.75;"><span class="dre-label" style="color:var(--warn);">↳ A pagar</span><span class="dre-value" style="color:var(--warn);">${fmt(pendTotal)}</span></div>`:''}
       <div class="dre-row total"><span class="dre-label" style="font-weight:700;">(=) Resultado Operacional</span><span class="dre-value ${resultado>=0?'pos':'neg'}" style="font-size:16px;">${fmt(resultado)}</span></div>
     </div>
     <div class="dre-margin-card">
@@ -1903,15 +1801,14 @@ function openManualMatch(txnId){
   const absAmt=Math.abs(t.amount);
   const accountId=state.bankStatements[concilStatementIdx].accountId;
 
-  // Candidatos: valor similar ±10% ou R$2,00 (o que for maior)
-  const matchTol=Math.max(absAmt*0.10, 2);
+  // Candidatos: payables próximos ± 30 dias com valor similar (±20%)
   const payables=state.payables.filter(p=>
     (p.account===accountId||!p.account)&&
-    Math.abs(p.amount-absAmt)<=matchTol
+    Math.abs(p.amount-absAmt)/Math.max(absAmt,1)<=0.5
   ).sort((a,b)=>Math.abs(a.amount-absAmt)-Math.abs(b.amount-absAmt)).slice(0,10);
 
   const entries=(state.entries||[]).filter(e=>
-    Math.abs(e.amount-absAmt)<=matchTol
+    Math.abs(e.amount-absAmt)/Math.max(absAmt,1)<=0.5
   ).sort((a,b)=>Math.abs(a.amount-absAmt)-Math.abs(b.amount-absAmt)).slice(0,10);
 
   openSheet(`<div class="sheet-title">Vincular manualmente</div><div class="sheet-body">
